@@ -213,15 +213,3 @@ DECISIONS.md          Design decisions (6 questions)
 - **Error boundaries**: Basic; the UI shows raw error messages from the server in some cases.
 
 ---
-
-## Environment Variables Reference
-
-See `.env.example` for all required variables with comments.
-
-| Variable | Required | Description |
-|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase API URL (from `supabase status`) |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes | Supabase publishable key |
-| `SUPABASE_SECRET_KEY` | Yes | Supabase secret key (server-only, never sent to browser) |
-| `DATABASE_URL` | Yes | Direct PostgreSQL connection string for Prisma |
-| `GATEWAY_X_SIGNATURE_KEY` | Yes | Shared HMAC-SHA256 key with payment gateway |

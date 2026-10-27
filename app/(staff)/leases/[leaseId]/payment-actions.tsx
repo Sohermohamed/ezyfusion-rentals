@@ -12,11 +12,10 @@ import { Label } from '@/components/ui/label'
 
 interface Props {
   paymentId: string
-  leaseId: string
   status: string
 }
 
-export function PaymentActions({ paymentId, leaseId, status }: Props) {
+export function PaymentActions({ paymentId, status }: Props) {
   const router = useRouter()
   const [showRejectForm, setShowRejectForm] = useState(false)
   const [showVoidForm, setShowVoidForm] = useState(false)

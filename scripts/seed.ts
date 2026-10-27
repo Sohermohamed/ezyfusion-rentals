@@ -70,12 +70,12 @@ async function main() {
   // ============================================================
   // ORGANIZATIONS
   // ============================================================
-  const northwind = await (prisma as any).organization.upsert({
+  const northwind = await prisma.organization.upsert({
     where: { id: '00000000-0000-0000-0000-000000000001' },
     update: { name: 'Northwind Properties' },
     create: { id: '00000000-0000-0000-0000-000000000001', name: 'Northwind Properties' },
   })
-  const beta = await (prisma as any).organization.upsert({
+  const beta = await prisma.organization.upsert({
     where: { id: '00000000-0000-0000-0000-000000000002' },
     update: { name: 'Beta Realty' },
     create: { id: '00000000-0000-0000-0000-000000000002', name: 'Beta Realty' },
@@ -99,7 +99,7 @@ async function main() {
   // ============================================================
   // MEMBERSHIPS
   // ============================================================
-  await (prisma as any).$executeRaw`
+  await prisma.$executeRaw`
     INSERT INTO memberships (user_id, org_id, role)
     VALUES
       (${nwMgrId}::uuid,    ${northwind.id}::uuid, 'manager'),
@@ -113,13 +113,14 @@ async function main() {
   // ============================================================
   async function upsertTenant(orgId: string, userId: string, fullName: string, email: string): Promise<string> {
     // Insert if not exists (user_id doesn't have a unique constraint in schema — check by user_id)
-    await (prisma as any).$executeRaw`
+    await prisma.$executeRaw`
       INSERT INTO tenants (org_id, user_id, full_name, email, phone)
       SELECT ${orgId}::uuid, ${userId}::uuid, ${fullName}, ${email}, ''
       WHERE NOT EXISTS (SELECT 1 FROM tenants WHERE user_id = ${userId}::uuid)
     `
-    const t = await (prisma as any).tenant.findFirst({ where: { userId } })
-    return t!.id
+    const tenant = await prisma.tenant.findFirst({ where: { userId } })
+    if (!tenant) throw new Error(`Failed to find tenant for user ${userId}`)
+    return tenant.id
   }
 
   const aisyahId = await upsertTenant(northwind.id, aisyahUid, 'Aisyah Rahman', 'aisyah@northwind.test')
@@ -132,7 +133,7 @@ async function main() {
   // UNITS
   // ============================================================
   async function upsertUnit(orgId: string, name: string): Promise<string> {
-    const u = await (prisma as any).unit.upsert({
+    const u = await prisma.unit.upsert({
       where: { orgId_name: { orgId, name } },
       update: {},
       create: { orgId, name },
@@ -154,19 +155,19 @@ async function main() {
     orgId: string, unitId: string, tenantId: string,
     startDate: string, endDate: string, monthlyRentSen: number, depositSen: number,
   ): Promise<{ id: string }> {
-    const existing = await (prisma as any).lease.findFirst({ where: { unitId, orgId } })
+    const existing = await prisma.lease.findFirst({ where: { unitId, orgId } })
     if (existing) { console.log(`  Lease for unit ${unitId} already exists`); return existing }
 
     const schedule = generateSchedule({ startDate, endDate, monthlyRentSen, depositSen })
-    return (prisma as any).$transaction(async (tx: Tx) => {
-      const lease = await (tx as any).lease.create({
+    return prisma.$transaction(async (tx: Tx) => {
+      const lease = await tx.lease.create({
         data: {
           orgId, unitId, tenantId,
           startDate: new Date(startDate), endDate: new Date(endDate),
           monthlyRentSen: BigInt(monthlyRentSen), depositSen: BigInt(depositSen),
         },
       })
-      await (tx as any).invoice.createMany({
+      await tx.invoice.createMany({
         data: schedule.map((inv) => ({
           orgId, leaseId: lease.id, kind: inv.kind,
           periodIndex: inv.periodIndex,
@@ -190,12 +191,12 @@ async function main() {
   // ============================================================
 
   // Payment 1: Cash RM3000, received 2026-01-31 10:00 MYT = 2026-01-31T02:00:00Z, by manager
-  const p1Exists = await (prisma as any).payment.findFirst({
+  const p1Exists = await prisma.payment.findFirst({
     where: { leaseId: aisyahLease.id, method: 'cash', amountSen: BigInt(300000) },
   })
   if (!p1Exists) {
-    await (prisma as any).$transaction(async (tx: Tx) => {
-      const p1 = await (tx as any).payment.create({
+    await prisma.$transaction(async (tx: Tx) => {
+      const p1 = await tx.payment.create({
         data: {
           orgId: northwind.id, leaseId: aisyahLease.id,
           amountSen: BigInt(300000), unappliedSen: BigInt(0),
@@ -204,7 +205,7 @@ async function main() {
         },
       })
       await allocate(tx, p1.id)
-      await (tx as any).$executeRaw`
+      await tx.$executeRaw`
         INSERT INTO audit_log (org_id, actor_id, action, entity_id, details)
         VALUES (${northwind.id}::uuid, ${nwMgrId}::uuid, 'payment.recorded',
                 ${p1.id}::uuid, '{"method":"cash","amountSen":300000}'::jsonb)`
@@ -213,12 +214,12 @@ async function main() {
   }
 
   // Payment 2: Bank transfer RM2000, received 2026-03-01 00:30 MYT = 2026-02-28T16:30:00Z, by staff then approved
-  const p2Exists = await (prisma as any).payment.findFirst({
+  const p2Exists = await prisma.payment.findFirst({
     where: { leaseId: aisyahLease.id, method: 'bank_transfer', amountSen: BigInt(200000) },
   })
   if (!p2Exists) {
-    await (prisma as any).$transaction(async (tx: Tx) => {
-      const p2 = await (tx as any).payment.create({
+    await prisma.$transaction(async (tx: Tx) => {
+      const p2 = await tx.payment.create({
         data: {
           orgId: northwind.id, leaseId: aisyahLease.id,
           amountSen: BigInt(200000), unappliedSen: BigInt(0),
@@ -228,11 +229,11 @@ async function main() {
         },
       })
       await allocate(tx, p2.id)
-      await (tx as any).$executeRaw`
+      await tx.$executeRaw`
         INSERT INTO audit_log (org_id, actor_id, action, entity_id, details)
         VALUES (${northwind.id}::uuid, ${nwStaffId}::uuid, 'payment.recorded',
                 ${p2.id}::uuid, '{"method":"bank_transfer","amountSen":200000}'::jsonb)`
-      await (tx as any).$executeRaw`
+      await tx.$executeRaw`
         INSERT INTO audit_log (org_id, actor_id, action, entity_id, details)
         VALUES (${northwind.id}::uuid, ${nwMgrId}::uuid, 'payment.approved',
                 ${p2.id}::uuid, '{"amountSen":200000}'::jsonb)`
@@ -241,7 +242,7 @@ async function main() {
   }
 
   console.log('\n✅ Seed complete! Password for all accounts:', SEED_PASSWORD)
-  await (prisma as any).$disconnect()
+  await prisma.$disconnect()
   process.exit(0)
 }
 

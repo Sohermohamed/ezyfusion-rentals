@@ -181,7 +181,7 @@ export default async function LeaseDetailPage({ params }: { params: Promise<{ le
                       )}
                     </div>
                     {isManager && (
-                      <PaymentActions paymentId={p.id} status={p.status} leaseId={leaseId} />
+                      <PaymentActions paymentId={p.id} status={p.status} />
                     )}
                   </div>
                 </div>
